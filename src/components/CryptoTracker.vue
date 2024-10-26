@@ -6,7 +6,7 @@
     <div v-if="!isPhoneRegistered" class="phone-input-section">
       <label for="userPhone">Número de Celular:</label>
       <input v-model="userPhone" type="tel" id="userPhone" placeholder="Digite seu número para login" @input="formatPhoneInput">
-      <button @click="verifyPhone">Verificar</button>
+      <button @click="verifyPhone">Login</button>
     </div>
 
     <!-- Exibe mensagem caso o telefone não esteja cadastrado -->
@@ -46,7 +46,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 
 export default {
   name: 'CryptoPriceTracker',
@@ -63,6 +63,7 @@ export default {
     const errorMessage = ref('');
     const userName = ref(''); // Armazena o nome do usuário para a mensagem de boas-vindas
     const countryCode = '+55'; // Código do país
+    const resetDifference = ref(true); // Controla quando resetar a última diferença
     let updateInterval = null;
     let countdownInterval = null;
 
@@ -104,7 +105,15 @@ export default {
         const response = await fetch(`https://www.mercadobitcoin.com.br/api/${selectedCrypto.value}/ticker/`);
         const data = await response.json();
         const newPrice = parseFloat(data.ticker.last);
-        lastDifference.value = price.value !== null ? newPrice - price.value : 0;
+
+        // Atualiza a diferença somente se resetDifference for falso
+        if (!resetDifference.value) {
+          lastDifference.value = price.value !== null ? newPrice - price.value : 0;
+        } else {
+          lastDifference.value = null;
+          resetDifference.value = false; // Desativa o resetDifference para as próximas atualizações
+        }
+
         price.value = newPrice;
       } catch (error) {
         console.error("Erro ao buscar preço:", error);
@@ -113,6 +122,13 @@ export default {
 
     onMounted(() => {
       updatePrice();
+    });
+
+    // Adiciona um watcher para atualizar o preço e zerar a última diferença ao mudar a moeda
+    watch(selectedCrypto, () => {
+      lastDifference.value = null; // Zera o campo de última diferença
+      resetDifference.value = true; // Ativa o reset para a primeira atualização
+      updatePrice(); // Atualiza o preço da nova moeda selecionada
     });
 
     // Formata o número de telefone para o formato (XX) XXXXX-XXXX
@@ -140,6 +156,9 @@ export default {
           userName.value = user.name;
           isPhoneRegistered.value = true;
           errorMessage.value = '';
+          
+          // Atualiza o preço da criptomoeda ao efetuar login
+          await updatePrice();
         } else {
           errorMessage.value = 'Número não cadastrado. Cadastre-se antes de iniciar o rastreamento.';
           isPhoneRegistered.value = false;
@@ -185,7 +204,7 @@ div {
   margin: 0 auto;
   padding: 20px;
   border-radius: 10px;
-  background-color: #f9f9f9;
+  background-color: #ffffff; /* Cor de fundo branca para o div principal */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   font-family: Arial, sans-serif;
   color: #333;
