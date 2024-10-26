@@ -2,107 +2,177 @@
   <div>
     <h1>Crypto Price Tracker</h1>
     
-    <div>
-      <label for="crypto">Criptomoeda:</label>
-      <select v-model="selectedCrypto" id="crypto">
-        <option value="BTC">Bitcoin (BTC)</option>
-        <option value="ETH">Ethereum (ETH)</option>
-        <option value="LTC">Litecoin (LTC)</option>
-        <option value="SHIB">Shiba Inu (SHIB)</option>
-      </select>
+    <!-- Campo para o usuário inserir o telefone e verificar se está cadastrado -->
+    <div v-if="!isPhoneRegistered" class="phone-input-section">
+      <label for="userPhone">Número de Celular:</label>
+      <input v-model="userPhone" type="tel" id="userPhone" placeholder="Digite seu número para login" @input="formatPhoneInput">
+      <button @click="verifyPhone">Verificar</button>
     </div>
 
-    <!-- Exibe o preço atual da criptomoeda selecionada -->
-    <p>Preço Atual: <span>{{ price !== null ? formatCurrency(price) : 'Carregando...' }}</span></p>
+    <!-- Exibe mensagem caso o telefone não esteja cadastrado -->
+    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-    <!-- Campo de alerta de compra -->
-    <div>
-      <label for="buyAlertPrice">Defina um Alerta de Compra:</label>
-      <input v-model.number="buyAlertPrice" type="number" id="buyAlertPrice" placeholder="Ex: 100000">
+    <!-- Exibe o preço atual da criptomoeda selecionada após login -->
+    <div v-if="isPhoneRegistered">
+      <h2>Bem-vindo de volta, {{ userName }}!</h2>
+      <button @click="logout" class="logout-button">Logout</button>
+      <div>
+        <label for="crypto">Criptomoeda:</label>
+        <select v-model="selectedCrypto" id="crypto" class="small-input" :disabled="tracking">
+          <option value="BTC">Bitcoin (BTC)</option>
+          <option value="ETH">Ethereum (ETH)</option>
+          <option value="LTC">Litecoin (LTC)</option>
+          <option value="SHIB">Shiba Inu (SHIB)</option>
+        </select>
+      </div>
+
+      <p>Preço Atual: <span>{{ price !== null ? formatCurrency(price) : 'Carregando...' }}</span></p>
+      <p>Última Diferença: <span :class="{ positive: lastDifference > 0, negative: lastDifference < 0 }">{{ lastDifference !== null ? formatCurrency(lastDifference) : 'Nenhuma' }}</span></p>
+      <p>Próxima atualização em: <span>{{ countdown > 0 ? countdown : '' }}s</span></p>
+
+      <div>
+        <label for="buyAlertPrice">Defina um Alerta de Compra:</label>
+        <input v-model.number="buyAlertPrice" type="number" id="buyAlertPrice" placeholder="Ex: 100000" :disabled="tracking">
+      </div>
+
+      <div>
+        <label for="sellAlertPrice">Defina um Alerta de Venda:</label>
+        <input v-model.number="sellAlertPrice" type="number" id="sellAlertPrice" placeholder="Ex: 200000" :disabled="tracking">
+      </div>
+
+      <button @click="toggleTracking">{{ tracking ? 'Parar Rastreamento' : 'Iniciar Rastreamento' }}</button>
     </div>
-
-    <!-- Campo de alerta de venda -->
-    <div>
-      <label for="sellAlertPrice">Defina um Alerta de Venda:</label>
-      <input v-model.number="sellAlertPrice" type="number" id="sellAlertPrice" placeholder="Ex: 200000">
-    </div>
-
-    <button @click="startTracking">Iniciar Rastreamento</button>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 
 export default {
-  name: 'CryptoTracker',
+  name: 'CryptoPriceTracker',
   setup() {
     const selectedCrypto = ref('BTC');
     const price = ref(null);
     const buyAlertPrice = ref(null);
     const sellAlertPrice = ref(null);
     const tracking = ref(false);
+    const countdown = ref(15);
+    const lastDifference = ref(null);
+    const userPhone = ref(''); // Número inserido pelo usuário para verificação
+    const isPhoneRegistered = ref(false); // Verifica se o telefone está registrado
+    const errorMessage = ref('');
+    const userName = ref(''); // Armazena o nome do usuário para a mensagem de boas-vindas
+    const countryCode = '+55'; // Código do país
+    let updateInterval = null;
+    let countdownInterval = null;
 
-    // Função para buscar preço da criptomoeda
-    const fetchCryptoPrice = async () => {
-      try {
-        const response = await fetch(`https://www.mercadobitcoin.com.br/api/${selectedCrypto.value}/ticker/`);
-        const data = await response.json();
-        price.value = parseFloat(data.ticker.last);
-      } catch (error) {
-        console.error("Erro ao buscar preço:", error);
-        price.value = null;
-      }
-    };
-
-    // Função para formatar valores monetários no formato brasileiro com mais casas decimais
     const formatCurrency = (value) => {
       return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 12,
+        minimumFractionDigits: 8,
+        maximumFractionDigits: 8,
       }).format(value);
     };
 
-    // Atualiza o preço periodicamente e verifica os alertas de compra e venda
-    const updatePrice = async () => {
-      if (!tracking.value) return;
-
-      await fetchCryptoPrice(); // Atualiza o preço atual
-
-      // Verifica se o preço atinge o limite de compra
-      if (buyAlertPrice.value && price.value <= buyAlertPrice.value) {
-        alert(`Alerta de Compra! O preço de ${selectedCrypto.value} está em ${formatCurrency(price.value)}.`);
-        buyAlertPrice.value = null; // Reseta o alerta de compra após disparar
-      }
-
-      // Verifica se o preço atinge o limite de venda
-      if (sellAlertPrice.value && price.value >= sellAlertPrice.value) {
-        alert(`Alerta de Venda! O preço de ${selectedCrypto.value} está em ${formatCurrency(price.value)}.`);
-        sellAlertPrice.value = null; // Reseta o alerta de venda após disparar
+    const toggleTracking = () => {
+      tracking.value = !tracking.value;
+      if (tracking.value) {
+        startTracking();
+      } else {
+        stopTracking();
       }
     };
 
-    // Inicia o rastreamento e atualiza o preço a cada 30 segundos
     const startTracking = () => {
-      tracking.value = true;
-      setInterval(updatePrice, 30000);
+      countdown.value = 15;
+      updateInterval = setInterval(updatePrice, 15000);
+      countdownInterval = setInterval(() => {
+        countdown.value = countdown.value > 0 ? countdown.value - 1 : 15;
+      }, 1000);
     };
 
-    // Atualiza o preço quando a criptomoeda é alterada
-    watch(selectedCrypto, fetchCryptoPrice);
+    const stopTracking = () => {
+      clearInterval(updateInterval);
+      clearInterval(countdownInterval);
+      tracking.value = false;
+      countdown.value = 15;
+    };
 
-    // Faz a primeira chamada de preço ao montar o componente
-    onMounted(fetchCryptoPrice);
+    const updatePrice = async () => {
+      try {
+        const response = await fetch(`https://www.mercadobitcoin.com.br/api/${selectedCrypto.value}/ticker/`);
+        const data = await response.json();
+        const newPrice = parseFloat(data.ticker.last);
+        lastDifference.value = price.value !== null ? newPrice - price.value : 0;
+        price.value = newPrice;
+      } catch (error) {
+        console.error("Erro ao buscar preço:", error);
+      }
+    };
+
+    onMounted(() => {
+      updatePrice();
+    });
+
+    // Formata o número de telefone para o formato (XX) XXXXX-XXXX
+    const formatPhoneInput = () => {
+      let cleaned = userPhone.value.replace(/\D/g, ''); // Remove caracteres não numéricos
+      if (cleaned.length > 11) {
+        cleaned = cleaned.slice(0, 11); // Limita a 11 dígitos
+      }
+      userPhone.value = cleaned.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+    };
+
+    // Função para verificar se o telefone está cadastrado no db.json
+    const verifyPhone = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/fone');
+        const users = await response.json();
+
+        // Inclui o código do país antes dos 10 dígitos finais
+        const inputPhoneWithCountryCode = `${countryCode}${userPhone.value.replace(/\D/g, '')}`;
+
+        // Procura o usuário pelo número de telefone com o código do país
+        const user = users.find(user => user.phone === inputPhoneWithCountryCode);
+
+        if (user) {
+          userName.value = user.name;
+          isPhoneRegistered.value = true;
+          errorMessage.value = '';
+        } else {
+          errorMessage.value = 'Número não cadastrado. Cadastre-se antes de iniciar o rastreamento.';
+          isPhoneRegistered.value = false;
+        }
+      } catch (error) {
+        errorMessage.value = 'Erro ao verificar o número de telefone.';
+        console.error(error);
+      }
+    };
+
+    const logout = () => {
+      isPhoneRegistered.value = false;
+      userPhone.value = ''; // Limpa o campo de entrada de telefone
+      userName.value = ''; // Limpa o nome do usuário
+    };
 
     return {
       selectedCrypto,
       price,
       buyAlertPrice,
       sellAlertPrice,
-      startTracking,
+      countdown,
+      lastDifference,
+      tracking,
+      toggleTracking,
       formatCurrency,
+      userPhone,
+      isPhoneRegistered,
+      errorMessage,
+      userName,
+      verifyPhone,
+      formatPhoneInput,
+      logout,
     };
   }
 };
@@ -136,7 +206,7 @@ label {
   margin-bottom: 5px;
 }
 
-select, input[type="number"] {
+input, select, button {
   width: 100%;
   padding: 10px;
   margin-bottom: 15px;
@@ -147,47 +217,38 @@ select, input[type="number"] {
   transition: border-color 0.3s;
 }
 
-select:focus, input[type="number"]:focus {
-  border-color: #1e88e5;
-  outline: none;
-}
-
-p {
-  font-size: 18px;
-  font-weight: bold;
-  color: #4caf50;
-  text-align: center;
-  margin: 20px 0;
-}
-
 button {
-  width: 100%;
-  padding: 12px;
-  font-size: 16px;
-  font-weight: bold;
-  color: #fff;
   background-color: #1e88e5;
-  border: none;
-  border-radius: 5px;
+  color: #fff;
+  font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.3s;
 }
 
 button:hover {
   background-color: #1565c0;
 }
 
-button:focus {
-  outline: none;
+.logout-button {
+  background-color: #d9534f;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+  margin-bottom: 20px;
 }
 
-@media (max-width: 600px) {
-  h1 {
-    font-size: 20px;
-  }
+.logout-button:hover {
+  background-color: #c9302c;
+}
 
-  select, input[type="number"], button {
-    font-size: 14px;
-  }
+.error-message {
+  color: #e53935;
+  font-size: 16px;
+  text-align: center;
+  margin-top: 10px;
+}
+
+.phone-input-section {
+  text-align: center;
+  margin-bottom: 20px;
 }
 </style>

@@ -1,20 +1,21 @@
 <template>
   <div id="app">
-    <img alt="Vue logo" src="./assets/cripto.jpeg">
-    <CryptoTracker /> <!-- Componente de rastreamento de preço -->
+    <AppNavbar /> <!-- Componente de navegação -->
+    <router-view /> <!-- Exibe o componente da rota atual -->
   </div>
 </template>
 
 <script>
-import CryptoTracker from './components/CryptoTracker.vue';
+// src/components/App.vue
+import AppNavbar from './components/Navbar.vue';
 
 export default {
   name: 'App',
   components: {
-    CryptoTracker
-
-  }
-}
+    AppNavbar,
+   
+  },
+};
 </script>
 
 <style>
