@@ -1,15 +1,18 @@
 <template>
-  <img alt="Vue logo" src="./assets/logo.png">
-  <HelloWorld msg="Welcome to Your Vue.js App"/>
+  <div id="app">
+    <img alt="Vue logo" src="./assets/cripto.jpeg">
+    <CryptoTracker /> <!-- Componente de rastreamento de preço -->
+  </div>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+import CryptoTracker from './components/CryptoTracker.vue';
 
 export default {
   name: 'App',
   components: {
-    HelloWorld
+    CryptoTracker
+
   }
 }
 </script>
